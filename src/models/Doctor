@@ -1,0 +1,92 @@
+const mongoose = require('mongoose');
+
+const doctorSchema = new mongoose.Schema({
+  user: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: [true, 'Doctor must be linked to a user account']
+  },
+  specialization: {
+    type: String,
+    required: [true, 'Specialization is required']
+  },
+  qualifications: [{
+    degree: String,
+    institution: String,
+    year: Number
+  }],
+  licenseNumber: {
+    type: String,
+    required: [true, 'License number is required'],
+    unique: true
+  },
+  experience: {
+    type: Number, // years
+    default: 0
+  },
+  consultationFee: {
+    type: Number,
+    default: 0
+  },
+  availabilitySlots: [{
+    day: {
+      type: String,
+      enum: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+    },
+    startTime: String, // HH:MM format
+    endTime: String, // HH:MM format
+    isAvailable: {
+      type: Boolean,
+      default: true
+    }
+  }],
+  department: String,
+  bio: String,
+  profilePicture: String,
+  ratings: [{
+    rating: {
+      type: Number,
+      min: 1,
+      max: 5
+    },
+    review: String,
+    patient: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Patient'
+    },
+    date: {
+      type: Date,
+      default: Date.now
+    }
+  }],
+  averageRating: {
+    type: Number,
+    default: 0
+  }
+}, {
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
+});
+
+// Calculate average rating whenever ratings are modified
+doctorSchema.pre('save', function(next) {
+  if (this.ratings && this.ratings.length > 0) {
+    const totalRating = this.ratings.reduce((sum, item) => sum + item.rating, 0);
+    this.averageRating = totalRating / this.ratings.length;
+  } else {
+    this.averageRating = 0;
+  }
+  next();
+});
+
+// Virtual populate appointments
+doctorSchema.virtual('appointments', {
+  ref: 'Appointment',
+  foreignField: 'doctor',
+  localField: '_id'
+});
+
+const Doctor = mongoose.model('Doctor', doctorSchema);
+
+module.exports = Doctor;
