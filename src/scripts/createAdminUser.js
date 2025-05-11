@@ -13,12 +13,19 @@ const config = require('../config/config');
 
 const createAdminUser = async () => {
   try {
-    // Connect to MongoDB
-    await mongoose.connect(config.db.uri, {
-      serverSelectionTimeoutMS: 5000,
-      socketTimeoutMS: 45000,
-    });
-    console.log('MongoDB Connected');
+    // If we're running without database (indicated by global flag)
+    if (global.RUNNING_WITHOUT_DB === true) {
+      console.log('Skipping admin user creation - running without database');
+      return;
+    }
+
+    // Check if Mongoose is connected
+    if (mongoose.connection.readyState !== 1) {
+      console.log('MongoDB is not connected. Skipping admin user creation.');
+      return;
+    }
+
+    console.log('Creating admin user in connected database...');
 
     // Check if default hospital exists, create it if not
     let hospital = await Hospital.findOne({ isDefault: true });
@@ -79,7 +86,9 @@ const createAdminUser = async () => {
     }
 
     // Check if admin user already exists
-    const adminEmail = 'piyushrkc@gmail.com';
+    const adminEmail = process.env.ADMIN_EMAIL || 'piyushrkc@gmail.com';
+    const adminPassword = process.env.ADMIN_PASSWORD || 'ABC123xyz';
+
     const existingAdmin = await User.findOne({ email: adminEmail });
 
     if (existingAdmin) {
@@ -88,31 +97,31 @@ const createAdminUser = async () => {
       try {
         // Update admin password if needed and password exists
         if (existingAdmin.password) {
-          const passwordMatch = await bcrypt.compare('ABC123xyz', existingAdmin.password);
+          const passwordMatch = await bcrypt.compare(adminPassword, existingAdmin.password);
 
           if (!passwordMatch) {
             console.log('Updating admin password...');
-            existingAdmin.password = await bcrypt.hash('ABC123xyz', 12);
+            existingAdmin.password = await bcrypt.hash(adminPassword, 12);
             await existingAdmin.save();
             console.log('Admin password updated successfully.');
           }
         } else {
           // Handle case where user exists but has no password
           console.log('Admin exists but has no password. Setting password...');
-          existingAdmin.password = await bcrypt.hash('ABC123xyz', 12);
+          existingAdmin.password = await bcrypt.hash(adminPassword, 12);
           await existingAdmin.save();
           console.log('Admin password set successfully.');
         }
       } catch (err) {
         console.log('Error handling admin password, setting a new one:', err.message);
-        existingAdmin.password = await bcrypt.hash('ABC123xyz', 12);
+        existingAdmin.password = await bcrypt.hash(adminPassword, 12);
         await existingAdmin.save();
         console.log('Admin password reset successfully.');
       }
     } else {
       // Create admin user
-      const hashedPassword = await bcrypt.hash('ABC123xyz', 12);
-      
+      const hashedPassword = await bcrypt.hash(adminPassword, 12);
+
       const adminUser = new User({
         firstName: 'Piyush',
         lastName: 'Admin',
@@ -124,20 +133,24 @@ const createAdminUser = async () => {
         isEmailVerified: true,
         lastLogin: new Date()
       });
-      
+
       await adminUser.save();
       console.log('Admin user created successfully.');
     }
-    
+
     // Only disconnect from MongoDB if this script is run directly
     if (require.main === module) {
       await mongoose.disconnect();
       console.log('MongoDB Disconnected');
     }
-    
+
   } catch (error) {
     console.error('Error creating admin user:', error);
-    process.exit(1);
+
+    // Don't exit in production/Vercel environment
+    if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+      process.exit(1);
+    }
   }
 };
 
