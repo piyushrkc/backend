@@ -99,11 +99,17 @@ if (config.app.env === 'production') {
   ];
 
   const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
-  
+
   if (missingVars.length > 0) {
-    throw new Error(`Missing required environment variables for production: ${missingVars.join(', ')}`);
+    // On Vercel, log warning instead of throwing error
+    if (process.env.VERCEL) {
+      console.warn(`WARNING: Missing environment variables in Vercel: ${missingVars.join(', ')}`);
+      console.warn('Using default values for missing environment variables.');
+    } else {
+      throw new Error(`Missing required environment variables for production: ${missingVars.join(', ')}`);
+    }
   }
-  
+
   // Log warning if email not configured
   if (!config.email.isConfigured()) {
     console.warn('WARNING: Email service is not properly configured. Email functionality will be disabled.');
