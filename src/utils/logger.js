@@ -65,25 +65,36 @@ const transports = [
   }),
 ];
 
-// Add file transports for non-test environments
-if (config.app.env !== 'test') {
-  transports.push(
-    // Write errors to a separate file
-    new winston.transports.File({
-      filename: path.join(logDir, 'error.log'),
-      level: 'error',
-      format: fileFormat,
-      maxsize: 5242880, // 5MB
-      maxFiles: 5,
-    }),
-    // Write all logs to a combined file
-    new winston.transports.File({
-      filename: path.join(logDir, 'combined.log'),
-      format: fileFormat,
-      maxsize: 5242880, // 5MB
-      maxFiles: 5,
-    }),
-  );
+// Add file transports only for local development (not on Vercel)
+// Check if we're not in serverless environment (Vercel functions run as serverless)
+if (config.app.env !== 'test' && config.app.env !== 'production' && !process.env.VERCEL) {
+  try {
+    // Check if logs directory exists, create if it doesn't
+    const fs = require('fs');
+    if (!fs.existsSync(logDir)) {
+      fs.mkdirSync(logDir, { recursive: true });
+    }
+
+    transports.push(
+      // Write errors to a separate file
+      new winston.transports.File({
+        filename: path.join(logDir, 'error.log'),
+        level: 'error',
+        format: fileFormat,
+        maxsize: 5242880, // 5MB
+        maxFiles: 5,
+      }),
+      // Write all logs to a combined file
+      new winston.transports.File({
+        filename: path.join(logDir, 'combined.log'),
+        format: fileFormat,
+        maxsize: 5242880, // 5MB
+        maxFiles: 5,
+      }),
+    );
+  } catch (error) {
+    console.error('Unable to configure file logging:', error);
+  }
 }
 
 // Create the logger
